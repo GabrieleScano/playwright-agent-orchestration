@@ -1,4 +1,14 @@
+import { release } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * Browser da usare.
+ * Playwright non scarica più il suo Chromium per macOS 13 o precedenti (Darwin < 23):
+ * lì usiamo il Google Chrome già installato sul computer (channel "chrome").
+ * Si può forzare con PW_CHANNEL, es. PW_CHANNEL=chrome oppure PW_CHANNEL=msedge.
+ */
+const oldMac = process.platform === 'darwin' && Number(release().split('.')[0]) < 23;
+const CHANNEL = process.env.PW_CHANNEL ?? (oldMac ? 'chrome' : undefined);
 
 // Porta dell'app demo. 4310 è poco usata (3000, 4173, 5173, 8080 sono spesso occupate da altri progetti).
 // Per cambiarla: PORT=5000 npx playwright test
@@ -28,5 +38,5 @@ export default defineConfig({
     // Playwright si ferma con un errore chiaro invece di testare l'app sbagliata.
     reuseExistingServer: false,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...(CHANNEL ? { channel: CHANNEL } : {}) } }],
 });

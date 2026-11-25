@@ -81,6 +81,9 @@ Variabili: `AGENT_BUDGET_USD` (default 1), `TRIAGE_MODEL` (haiku), `HEAL_MODEL` 
   (su Windows PowerShell: `$env:PORT=5000; npx playwright test --ui`).
 - **Node:** serve almeno la versione 20.11 (consigliata la 22).
 - **Browser mancante:** `npx playwright install chromium`.
+- **macOS 13 o precedenti:** Playwright non scarica più il suo Chromium (`Playwright does not support chromium on mac13`).
+  Il progetto se ne accorge da solo e usa il **Google Chrome installato** sul Mac: basta avere Chrome e saltare `npx playwright install`.
+  Per forzare un browser di sistema ovunque: `PW_CHANNEL=chrome npx playwright test` (oppure `msedge`).
 
 ### In CI
 Il workflow [`e2e.yml`](.github/workflows/e2e.yml) esegue i test a ogni push e PR. Se falliscono e il secret
