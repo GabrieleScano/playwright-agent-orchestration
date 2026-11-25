@@ -65,7 +65,7 @@ const pct = (s: TestStats) => `${s.passes}/${s.runs}`;
 async function analyse(s: TestStats): Promise<Diagnosis> {
   const prompt = [
     `Test flaky: ${s.title}`,
-    `File: tests/${s.file}:${s.line}`,
+    `File: ${s.file}:${s.line}`,
     `Passato ${s.passes} volte su ${s.runs} esecuzioni identiche.`,
     s.errorContext ? `Snapshot della pagina in un'esecuzione fallita: ${s.errorContext}` : '',
     `Errori distinti osservati:\n${s.errors.map((e, i) => `--- ${i + 1}\n${e}`).join('\n')}`,
@@ -88,17 +88,17 @@ async function analyse(s: TestStats): Promise<Diagnosis> {
 
 async function heal(items: { s: TestStats; d: Diagnosis }[]): Promise<string> {
   const list = items
-    .map(({ s, d }) => `- tests/${s.file}:${s.line} "${s.title}" (passa ${pct(s)})\n  Causa: ${d.root_cause}\n  Fix proposto: ${d.fix}`)
+    .map(({ s, d }) => `- ${s.file}:${s.line} "${s.title}" (passa ${pct(s)})\n  Causa: ${d.root_cause}\n  Fix proposto: ${d.fix}`)
     .join('\n');
   const res = await engine.run({
     agent: 'playwright-test-healer',
     prompt:
       `Questi test sono FLAKY (a volte passano, a volte no). L'app è corretta: la causa è nel test.\n${list}\n\n` +
       'Rendi i test deterministici con asserzioni web-first che riprovano automaticamente. ' +
-      'VIETATO: waitForTimeout, aumentare retry o timeout, test.skip/fixme. Modifica solo file in tests/. ' +
+      'VIETATO: waitForTimeout, aumentare retry o timeout, test.skip/fixme. Modifica solo file in tests/ e features/steps/ (mai i file .feature). ' +
       'Alla fine elenca in italiano cosa hai cambiato.',
-    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)'],
-    disallowedTools: ['Read(chaos/**)'],
+    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)', 'Edit(features/steps/**)'],
+    disallowedTools: ['Read(chaos/**)', 'Edit(features/**/*.feature)'],
     model: HEAL_MODEL,
   });
   return res.text;
@@ -142,8 +142,8 @@ async function main() {
 
   for (const { s, d } of appRaces) {
     writeFileSync(
-      join(reportDir, `race-${s.id.slice(0, 8)}.md`),
-      `# 🎲 ${d.root_cause}\n\n- **Test:** \`tests/${s.file}:${s.line}\` – passa ${pct(s)}\n\n## Prove\n${d.evidence}\n\n## Fix proposto\n${d.fix}\n`,
+      join(reportDir, `race-${s.id}.md`),
+      `# 🎲 ${d.root_cause}\n\n- **Test:** \`${s.file}:${s.line}\` – passa ${pct(s)}\n\n## Prove\n${d.evidence}\n\n## Fix proposto\n${d.fix}\n`,
     );
   }
 
@@ -159,7 +159,7 @@ async function main() {
 
   // ---------- Guardrail 1: il diff non deve contenere cerotti ----------
   const warnings: string[] = [];
-  const diff = execSync('git diff -U0 -- tests', { cwd }).toString();
+  const diff = execSync('git diff -U0 -- tests features', { cwd }).toString();
   const added = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
   for (const line of added)
     if (BANDAIDS.some((re) => re.test(line))) warnings.push(`Cerotto aggiunto dall'healer: \`${line.slice(1).trim()}\``);

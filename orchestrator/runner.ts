@@ -10,7 +10,9 @@ import { join } from 'node:path';
 export interface Failure {
   id: string;
   title: string;
+  /** Percorso dal root del repo: tests/... per i test classici, features/....feature per gli scenari BDD. */
   file: string;
+  kind: TestKind;
   line: number;
   error: string;
   errorContext?: string; // percorso di error-context.md (snapshot della pagina al fallimento)
@@ -37,12 +39,32 @@ interface JsonSpec {
   tests: { status: string; results: { status: string; error?: { message?: string }; attachments?: { name: string; path?: string }[] }[] }[];
 }
 
+export type TestKind = 'classic' | 'bdd';
+
+/**
+ * Gli scenari BDD girano come file generati in .features-gen/: per gli agenti (e per noi)
+ * conta il file .feature da cui nascono, non il codice generato.
+ */
+function locate(specFile: string): { file: string; kind: TestKind } {
+  if (specFile.startsWith('.features-gen/')) {
+    return { file: specFile.replace(/^\.features-gen\//, '').replace(/\.spec\.js$/, ''), kind: 'bdd' };
+  }
+  return { file: `tests/${specFile}`, kind: 'classic' };
+}
+
+/** Rigenera i test dai .feature: va fatto prima di ogni esecuzione. */
+function bddgen(cwd: string) {
+  const r = spawnSync('npx', ['bddgen'], { cwd, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`bddgen fallito (step mancanti o .feature non valido):\n${r.stdout}${r.stderr}`);
+}
+
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 export function runTests(cwd: string, env: NodeJS.ProcessEnv = {}, grep?: string): RunSummary {
   const out = join(cwd, 'test-results', 'orchestrator-report.json');
   const args = ['playwright', 'test', '--reporter=json', '--trace=off', '--retries=0'];
   if (grep) args.push('--grep', grep);
+  bddgen(cwd);
   spawnSync('npx', args, {
     cwd,
     env: { ...process.env, ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: out },
@@ -64,7 +86,7 @@ export function runTests(cwd: string, env: NodeJS.ProcessEnv = {}, grep?: string
           summary.failures.push({
             id: spec.id,
             title: [...path, spec.title].filter(Boolean).join(' › '),
-            file: spec.file,
+            ...locate(spec.file),
             line: spec.line,
             error: stripAnsi(last?.error?.message ?? 'errore sconosciuto').slice(0, 1500),
             errorContext: ctx,
@@ -84,6 +106,7 @@ export interface TestStats {
   id: string;
   title: string;
   file: string;
+  kind: TestKind;
   line: number;
   runs: number;
   passes: number;
@@ -99,6 +122,7 @@ export interface TestStats {
  */
 export function runRepeated(cwd: string, repeatEach: number): TestStats[] {
   const out = join(cwd, 'test-results', 'orchestrator-repeat.json');
+  bddgen(cwd);
   spawnSync('npx', ['playwright', 'test', '--reporter=json', '--trace=off', '--retries=0', `--repeat-each=${repeatEach}`], {
     cwd,
     env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: out },
@@ -113,7 +137,7 @@ export function runRepeated(cwd: string, repeatEach: number): TestStats[] {
       const s: TestStats = {
         id: spec.id,
         title: [...path, spec.title].filter(Boolean).join(' › '),
-        file: spec.file,
+        ...locate(spec.file),
         line: spec.line,
         runs: 0,
         passes: 0,
@@ -136,4 +160,9 @@ export function runRepeated(cwd: string, repeatEach: number): TestStats[] {
   };
   for (const s of report.suites) visit(s, []);
   return stats;
+}
+
+/** Come presentare la posizione di un test a un agente o in un report. */
+export function where(t: { file: string; line: number; kind: TestKind }): string {
+  return t.kind === 'bdd' ? `${t.file} (scenario BDD; step definitions in features/steps/)` : `${t.file}:${t.line}`;
 }

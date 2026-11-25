@@ -27,6 +27,16 @@ Metodo:
 3. Se serve, leggi il codice dell'app in `demo-app/` per capire se il comportamento è voluto.
 4. Chiediti: "Un utente reale noterebbe un problema?" Se sì → `app_bug`. Se no → `broken_test`.
 
+Scenari BDD (file in `features/*.feature`):
+- Il `.feature` è il **requisito** concordato con il business (il COSA). Le step definitions in
+  `features/steps/` sono l'implementazione del test (il COME).
+- `broken_test`: il requisito scritto nel `.feature` è ancora rispettato dall'app, ma una step definition
+  è rimasta indietro (locator, testo di un bottone, timing). Indica in `suggested_fix` quale step definition cambiare.
+- `app_bug`: l'app contraddice ciò che il `.feature` dice (es. il totale non è quello scritto nello scenario).
+  Anche se pensi che il requisito sia cambiato, NON proporre di modificare il `.feature`: scrivilo in `evidence`,
+  decide una persona.
+- Leggi sempre il `.feature` e la step definition della frase che fallisce prima di decidere.
+
 Regole:
 - Non classificare MAI come `broken_test` un fallimento in cui l'app mostra un valore sbagliato
   (es. un totale errato): adattare il test nasconderebbe il bug.

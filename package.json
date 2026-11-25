@@ -4,14 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test",
+    "test": "bddgen && playwright test",
     "demo": "node demo-app/server.mjs",
     "typecheck": "tsc",
     "mcp:explore": "tsx agents/mcp-explore.ts",
     "orchestrate": "tsx orchestrator/index.ts",
     "chaos": "node chaos/apply.mjs",
     "chaos:reset": "git checkout -- demo-app",
-    "flaky": "tsx orchestrator/flaky.ts"
+    "flaky": "tsx orchestrator/flaky.ts",
+    "test:ui": "bddgen && playwright test --ui",
+    "bddgen": "bddgen"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +23,7 @@
     "@playwright/mcp": "^0.0.86",
     "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.10",
+    "playwright-bdd": "^9.2.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },

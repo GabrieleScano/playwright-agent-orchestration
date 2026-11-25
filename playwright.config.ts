@@ -1,5 +1,6 @@
 import { release } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
+import { defineBddConfig } from 'playwright-bdd';
 
 /**
  * Browser da usare.
@@ -15,8 +16,20 @@ const CHANNEL = process.env.PW_CHANNEL ?? (oldMac ? 'chrome' : undefined);
 const PORT = process.env.PORT ?? '4310';
 const BASE_URL = `http://localhost:${PORT}`;
 
+/**
+ * Passo 7 – BDD con playwright-bdd.
+ * I file .feature (Gherkin) vengono tradotti in test Playwright normali dentro .features-gen/
+ * dal comando `npx bddgen`. Per questo `npm test` e `npm run test:ui` lanciano bddgen prima di Playwright.
+ */
+const bddTestDir = defineBddConfig({
+  features: 'features/**/*.feature',
+  steps: 'features/steps/**/*.ts',
+  language: 'it',
+});
+
+const browser = { ...devices['Desktop Chrome'], ...(CHANNEL ? { channel: CHANNEL } : {}) };
+
 export default defineConfig({
-  testDir: './tests',
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
@@ -38,5 +51,10 @@ export default defineConfig({
     // Playwright si ferma con un errore chiaro invece di testare l'app sbagliata.
     reuseExistingServer: false,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...(CHANNEL ? { channel: CHANNEL } : {}) } }],
+  projects: [
+    // Test "classici" scritti in TypeScript (seed per gli agenti, demo dei flaky).
+    { name: 'chromium', testDir: './tests', use: browser },
+    // Scenari BDD: i requisiti in italiano in features/*.feature.
+    { name: 'bdd', testDir: bddTestDir, use: browser },
+  ],
 });
