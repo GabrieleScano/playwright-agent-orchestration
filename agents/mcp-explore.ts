@@ -46,7 +46,7 @@ async function call(name: string, toolArgs: Record<string, unknown> = {}) {
 }
 
 // 3. Navighiamo, poi chiediamo uno "snapshot": è così che l'agente "vede" la pagina.
-await call('browser_navigate', { url: 'http://localhost:3000' });
+await call('browser_navigate', { url: `http://localhost:${process.env.PORT ?? 4310}` });
 let snapshot = await call('browser_snapshot');
 
 // 4. Lo snapshot è l'accessibility tree in YAML, con riferimenti tipo [ref=e12].
