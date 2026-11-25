@@ -6,7 +6,7 @@ Un prototipo di **framework di test interno basato su agenti AI**, costruito sop
 Quando i test end-to-end falliscono, un orchestratore TypeScript coordina agenti con ruoli separati che
 **classificano** il fallimento (test fragile, bug dell'app o ambiente), **riparano** i test fragili, **segnalano**
 i bug veri e **scovano** i test flaky. Gli scenari sono scritti in **BDD (Gherkin in italiano)**: gli agenti possono
-riparare le step definitions ma mai i requisiti. Tutto con guardrail in codice e un tetto di spesa per esecuzione.
+riparare le step definitions ma mai i requisiti, e i locator vivono solo nei **page object** (una riga ripara tutti i test). Tutto con guardrail in codice e un tetto di spesa per esecuzione.
 
 > Progetto di apprendimento costruito passo per passo: ogni passo ha la sua spiegazione in [`docs/`](docs/).
 
@@ -36,9 +36,9 @@ riparare le step definitions ma mai i requisiti. Tutto con guardrail in codice e
 | `failure-triage` | agente | haiku | sola lettura, output JSON |
 | `flaky-analyst` | agente | haiku | sola lettura, output JSON |
 | Router e guardrail | codice | — | — |
-| `playwright-test-healer` | agente | sonnet | modifica solo `tests/**` e `features/steps/**`, **mai** i `.feature` |
+| `playwright-test-healer` | agente | sonnet | modifica solo `pages/**`, `tests/**` e `features/steps/**`, **mai** i `.feature` |
 | `bdd-planner` | agente | sonnet | scrive solo `.feature` nuovi, in italiano |
-| `bdd-generator` | agente | sonnet | scrive solo in `features/steps/**` |
+| `bdd-generator` | agente | sonnet | scrive solo in `features/steps/**` e `pages/**` |
 | `playwright-test-planner` / `generator` | agente | sonnet | su richiesta, per nuovi test classici |
 
 ## Risultati misurati
@@ -47,6 +47,7 @@ riparare le step definitions ma mai i requisiti. Tutto con guardrail in codice e
 |---|---|---|
 | Commit che rinomina un bottone **e** introduce un bug nel totale | Giro 1: locator aggiornato in 6 test. Giro 2: 2 `app_bug` al 97%, con bug report sulla riga esatta. Test giusti lasciati rossi | **$0.078** ([report](docs/esempi/run-3-budget-haiku.md)) |
 | Stesso commit, suite in BDD | Healer: **1 riga** nello step condiviso (`ui.loginButton`) e 6 scenari verdi. 3 `app_bug` sul totale restano rossi, nessun `.feature` toccato | **$0.121** ([report](docs/esempi/run-bdd.md)) |
+| Stesso commit, con Page Object Model (15 test) | Healer: **1 riga** in `pages/LoginPage.ts`, 10 test verdi (BDD e classici). 3 `app_bug` restano rossi | **$0.152** ([report](docs/esempi/run-pom.md)) |
 | Carrello reso asincrono, test che legge `textContent()` senza aspettare | Rilevato flaky (9/10), diagnosi `test_timing` 95%, fix di 2 righe, verificato 20/20 | **$0.06** ([report](docs/esempi/flaky-run.md)) |
 | Più di 10 test rossi (app giù, deploy rotto) | Interruttore di sicurezza: nessun agente, report con i primi errori | **$0** |
 | Pipeline verde | Nessun agente chiamato | **$0** |
@@ -73,7 +74,7 @@ npm run test:ui                            # UI mode, con anche gli scenari BDD
 # richiedono la CLI `claude` (Claude Code) autenticata
 npm run chaos -- rename-button,price-bug   # simula un commit "cattivo"
 npm run orchestrate                        # triage + self-healing + bug report
-npm run chaos:reset && git checkout -- tests features
+npm run chaos:reset && git checkout -- pages tests features
 
 npm run bdd -- "il catalogo dei prodotti"  # planner scrive il .feature, generator gli step mancanti
 
@@ -110,12 +111,14 @@ Con *Run workflow* si può scegliere una mutazione `chaos` per una demo dal vivo
 | 5 | [Test flaky](docs/passo-5.md) | statistica prima dell'AI, niente cerotti |
 | 6 | [CI e costi](docs/passo-6.md) | budget, modello per ruolo, agenti solo sul rosso |
 | 7 | [BDD con playwright-bdd](docs/passo-7.md) | il requisito (`.feature`) è di una persona, gli step possono essere dell'agente |
+| 8 | [Page Object Model](docs/passo-8.md) | un locator, un posto: riparazioni da una riga, condivise da test classici e BDD |
 
 ## Struttura
 
 ```
 demo-app/            app da testare (HTML/JS statico + mini server Node)
 features/            scenari BDD in Gherkin italiano (*.feature) + step definitions (steps/)
+pages/               page object (LoginPage, ShopPage) + fixture condivise da test e step
 tests/               test Playwright classici
 specs/               piani di test scritti dal planner
 orchestrator/        engine LLM intercambiabile + budget, runner, triage/router/healer, flaky, bdd
