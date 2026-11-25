@@ -23,7 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BudgetedEngine, ClaudeCodeEngine } from './engine.js';
 import { runRepeated, type TestStats } from './runner.js';
-import { log, mapLimit } from './util.js';
+import { locatorsOutsidePages, log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
 const BUDGET_USD = Number(process.env.AGENT_BUDGET_USD ?? 1);
@@ -95,9 +95,9 @@ async function heal(items: { s: TestStats; d: Diagnosis }[]): Promise<string> {
     prompt:
       `Questi test sono FLAKY (a volte passano, a volte no). L'app è corretta: la causa è nel test.\n${list}\n\n` +
       'Rendi i test deterministici con asserzioni web-first che riprovano automaticamente. ' +
-      'VIETATO: waitForTimeout, aumentare retry o timeout, test.skip/fixme. Modifica solo file in tests/ e features/steps/ (mai i file .feature). ' +
+      'VIETATO: waitForTimeout, aumentare retry o timeout, test.skip/fixme. Modifica solo file in pages/, tests/ e features/steps/ (mai i file .feature). I locator vivono solo nei page object in pages/. ' +
       'Alla fine elenca in italiano cosa hai cambiato.',
-    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)', 'Edit(features/steps/**)'],
+    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(pages/**)', 'Edit(tests/**)', 'Edit(features/steps/**)'],
     disallowedTools: ['Read(chaos/**)', 'Edit(features/**/*.feature)'],
     model: HEAL_MODEL,
   });
@@ -158,8 +158,8 @@ async function main() {
   }
 
   // ---------- Guardrail 1: il diff non deve contenere cerotti ----------
-  const warnings: string[] = [];
-  const diff = execSync('git diff -U0 -- tests features', { cwd }).toString();
+  const warnings: string[] = locatorsOutsidePages(cwd);
+  const diff = execSync('git diff -U0 -- pages tests features', { cwd }).toString();
   const added = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
   for (const line of added)
     if (BANDAIDS.some((re) => re.test(line))) warnings.push(`Cerotto aggiunto dall'healer: \`${line.slice(1).trim()}\``);

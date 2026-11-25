@@ -31,7 +31,11 @@ Scenari BDD (file in `features/*.feature`):
 - Il `.feature` è il **requisito** concordato con il business (il COSA). Le step definitions in
   `features/steps/` sono l'implementazione del test (il COME).
 - `broken_test`: il requisito scritto nel `.feature` è ancora rispettato dall'app, ma una step definition
-  è rimasta indietro (locator, testo di un bottone, timing). Indica in `suggested_fix` quale step definition cambiare.
+  è rimasta indietro (locator, testo di un bottone, timing). Indica in `suggested_fix` cosa cambiare.
+
+Page Object Model: i locator stanno nei page object in `pages/` (`LoginPage`, `ShopPage`, `CartPanel`).
+Se il problema è un locator, `suggested_fix` deve indicare **il page object e la proprietà** da correggere
+(es. "`LoginPage.submit`: il bottone ora si chiama Login"), non il singolo test.
 - `app_bug`: l'app contraddice ciò che il `.feature` dice (es. il totale non è quello scritto nello scenario).
   Anche se pensi che il requisito sia cambiato, NON proporre di modificare il `.feature`: scrivilo in `evidence`,
   decide una persona.

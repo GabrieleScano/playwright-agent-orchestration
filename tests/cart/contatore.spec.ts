@@ -1,18 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../pages/fixtures.js';
 
-// Test scritto "di fretta": legge il testo una volta sola invece di usare
-// un'asserzione che riprova (web-first). Funziona... finché l'app è istantanea.
+// Test classico (non BDD) che usa gli stessi page object degli scenari Gherkin:
+// un bottone rinominato si corregge in pages/, una volta per tutti.
 test.describe('Carrello', () => {
-  test('il contatore si aggiorna dopo ogni aggiunta', async ({ page }) => {
-    await page.goto('/');
-    await page.getByLabel('Email').fill('utente@example.com');
-    await page.getByLabel('Password').fill('segreta');
-    await page.getByRole('button', { name: 'Entra' }).click();
+  test('il contatore si aggiorna dopo ogni aggiunta', async ({ loginPage, shopPage }) => {
+    await loginPage.loginAsDefaultUser();
 
-    await page.getByRole('button', { name: 'Aggiungi Tazza' }).click();
-    await expect(page.getByTestId('cart-count')).toHaveText('1');
+    await shopPage.add('Tazza');
+    await expect(shopPage.cart.count).toHaveText('1');
 
-    await page.getByRole('button', { name: 'Aggiungi Maglietta' }).click();
-    await expect(page.getByTestId('cart-count')).toHaveText('2');
+    await shopPage.add('Maglietta');
+    await expect(shopPage.cart.count).toHaveText('2');
   });
 });

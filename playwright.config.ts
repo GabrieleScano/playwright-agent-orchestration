@@ -23,7 +23,7 @@ const BASE_URL = `http://localhost:${PORT}`;
  */
 const bddTestDir = defineBddConfig({
   features: 'features/**/*.feature',
-  steps: 'features/steps/**/*.ts',
+  steps: ['features/steps/**/*.ts', 'pages/fixtures.ts'],
   language: 'it',
 });
 
