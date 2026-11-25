@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Mini Shop</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+  <main>
+    <section id="login-view">
+      <h1>Mini Shop</h1>
+      <form id="login-form">
+        <label>Email <input name="email" type="email" required></label>
+        <label>Password <input name="password" type="password" required></label>
+        <button type="submit">Accedi</button>
+        <p role="alert" id="login-error" hidden></p>
+      </form>
+    </section>
+    <section id="shop-view" hidden>
+      <h1>Prodotti</h1>
+      <p id="welcome"></p>
+      <ul id="products"></ul>
+      <h2>Carrello</h2>
+      <p>Articoli: <span data-testid="cart-count">0</span></p>
+      <p>Totale: <span data-testid="cart-total">0.00</span> €</p>
+      <button id="checkout">Vai al pagamento</button>
+      <p role="status" id="checkout-msg" hidden></p>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
