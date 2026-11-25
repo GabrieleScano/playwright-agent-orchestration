@@ -21,11 +21,23 @@
 import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ClaudeCodeEngine, type AgentEngine } from './engine.js';
+import { BudgetedEngine, BudgetExceededError, ClaudeCodeEngine } from './engine.js';
 import { runTests, type Failure, type RunSummary } from './runner.js';
+import { log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
-const engine: AgentEngine = new ClaudeCodeEngine({ cwd, mcpConfig: join(cwd, '.mcp.json') });
+
+// ---------- Controllo dei costi (Passo 6) ----------
+/** Tetto di spesa per esecuzione: oltre, gli agenti non vengono più chiamati. */
+const BUDGET_USD = Number(process.env.AGENT_BUDGET_USD ?? 1);
+/** Il triage è un compito di classificazione: basta un modello piccolo ed economico. */
+const TRIAGE_MODEL = process.env.TRIAGE_MODEL ?? 'haiku';
+/** L'healer deve navigare, debuggare e modificare codice: serve un modello più capace. */
+const HEAL_MODEL = process.env.HEAL_MODEL ?? 'sonnet';
+/** Oltre questa soglia il problema è quasi sempre sistemico (app giù, ambiente rotto): niente agenti. */
+const MAX_FAILURES = Number(process.env.MAX_FAILURES ?? 10);
+
+const engine = new BudgetedEngine(new ClaudeCodeEngine({ cwd, mcpConfig: join(cwd, '.mcp.json') }), BUDGET_USD);
 const MIN_CONFIDENCE = 0.7;
 const MAX_PARALLEL = 3;
 
@@ -51,23 +63,6 @@ const verdictSchema = {
   additionalProperties: false,
 };
 
-let totalCost = 0;
-const log = (msg: string) => console.log(`[${new Date().toLocaleTimeString('it-IT')}] ${msg}`);
-
-/** Esegue fn su ogni elemento, al massimo `limit` alla volta (fan-out controllato). */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
 // ---------- 1. Triage: un agente per fallimento, in parallelo (sola lettura) ----------
 async function triage(f: Failure): Promise<Verdict> {
   const prompt = [
@@ -85,12 +80,13 @@ async function triage(f: Failure): Promise<Verdict> {
       // Il triage deve giudicare "alla cieca": non può sapere quali mutazioni abbiamo iniettato.
       disallowedTools: ['Read(chaos/**)'],
       jsonSchema: verdictSchema,
+      model: TRIAGE_MODEL,
     });
-    totalCost += res.costUsd;
     if (!res.data) throw new Error('risposta senza JSON');
     return res.data;
   } catch (e) {
-    return { category: 'unknown', confidence: 0, summary: 'Triage fallito', evidence: String(e).slice(0, 300), suggested_fix: '' };
+    const summary = e instanceof BudgetExceededError ? `${e.message}: decide una persona` : 'Triage fallito';
+    return { category: 'unknown', confidence: 0, summary, evidence: String(e).slice(0, 300), suggested_fix: '' };
   }
 }
 
@@ -110,8 +106,8 @@ async function heal(items: { f: Failure; v: Verdict }[]): Promise<string> {
       'Alla fine elenca in italiano cosa hai cambiato.',
     allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)'],
     disallowedTools: ['Read(chaos/**)'],
+    model: HEAL_MODEL,
   });
-  totalCost += res.costUsd;
   return res.text;
 }
 
@@ -146,7 +142,19 @@ async function main() {
   log(`▶ Runner: eseguo la suite${appChanges ? " (app modificata rispetto all'ultimo commit)" : ''}`);
   const first = runTests(cwd);
   log(`  ${first.passed} passati, ${first.failed} falliti, ${first.skipped} saltati`);
-  if (first.failed === 0) return log('✅ Tutto verde, nessun agente necessario.');
+  if (first.failed === 0) return finish(reportDir, '# Report orchestratore\n\n✅ Tutto verde: nessun agente chiamato, costo $0.\n');
+
+  // Interruttore di sicurezza: con troppi rossi il problema è quasi sempre sistemico
+  // (app giù, deploy rotto, ambiente). Lanciare un agente per test sarebbe solo costoso.
+  if (first.failed > MAX_FAILURES) {
+    log(`⛔ ${first.failed} test falliti (soglia ${MAX_FAILURES}): probabile problema sistemico, niente agenti.`);
+    return finish(
+      reportDir,
+      `# Report orchestratore\n\n> ⛔ **${first.failed} test falliti su ${first.passed + first.failed}**, oltre la soglia di ${MAX_FAILURES}.\n` +
+        `> Probabile problema sistemico (app non raggiungibile, deploy rotto, ambiente): nessun agente chiamato, costo $0.\n\n` +
+        `## Primi errori\n${first.failures.slice(0, 5).map((f) => `- **${f.title}**: ${f.error.split('\n')[0]}`).join('\n')}\n`,
+    );
+  }
 
   const history: Entry[] = [];
   const bugIds = new Set<string>(); // test che rilevano un bug: devono restare rossi
@@ -182,7 +190,13 @@ async function main() {
 
     if (toHeal.length) {
       log(`▶ Healer: riparo ${toHeal.length} test fragili`);
-      healerNotes.push(`### Giro ${round}\n${await heal(toHeal)}`);
+      try {
+        healerNotes.push(`### Giro ${round}\n${await heal(toHeal)}`);
+      } catch (e) {
+        // Budget esaurito o agente fallito: i test restano rossi e senza diagnosi, il guardrail lo segnala.
+        healerNotes.push(`### Giro ${round}\n⚠️ Healer non eseguito: ${(e as Error).message.split('\n')[0]}`);
+        break;
+      }
     } else if (!verdicts.some((e) => e.v.category === 'environment')) {
       break; // niente da riparare né da riprovare: inutile rieseguire
     }
@@ -223,7 +237,7 @@ async function main() {
 - **Modifiche all'app non committate:** ${appChanges ? '\n```\n' + appChanges + '\n```' : 'nessuna'}
 - **Prima:** ${first.passed} passati, ${first.failed} falliti, ${first.skipped} saltati
 - **Dopo:** ${current.passed} passati, ${current.failed} falliti, ${current.skipped} saltati
-- **Durata:** ${Math.round((Date.now() - started) / 1000)} s · **Costo LLM stimato:** $${totalCost.toFixed(2)}
+- **Durata:** ${Math.round((Date.now() - started) / 1000)} s · **Costo LLM:** $${engine.spent.toFixed(3)} (budget $${BUDGET_USD.toFixed(2)})
 
 ${warnings.map((w) => `> ⚠️ ${w}`).join('\n') || '> ✅ Nessun guardrail violato.'}
 
@@ -234,12 +248,21 @@ ${rows}
 ## Bug dell'app
 ${bugIds.size ? `${bugIds.size} bug report in questa cartella (bug-*.md). I test relativi restano rossi finché l'app non viene corretta.` : 'Nessuno.'}
 
+## Costi per agente
+${engine.costTable()}
+
 ## Note dell'healer
 ${healerNotes.join('\n\n') || '_nessun intervento_'}
 `;
-  writeFileSync(join(reportDir, 'report.md'), report);
-  log(`📄 Report: ${join(reportDir, 'report.md')} (costo ~$${totalCost.toFixed(2)})`);
+  finish(reportDir, report);
   warnings.forEach((w) => log(`⚠️ ${w}`));
+}
+
+/** Scrive il report nella cartella dell'esecuzione e in reports/latest.md (comodo in CI). */
+function finish(reportDir: string, report: string) {
+  writeFileSync(join(reportDir, 'report.md'), report);
+  writeFileSync(join(cwd, 'reports', 'latest.md'), report);
+  log(`📄 Report: ${join(reportDir, 'report.md')} (costo $${engine.spent.toFixed(3)})`);
 }
 
 main().catch((e) => {
