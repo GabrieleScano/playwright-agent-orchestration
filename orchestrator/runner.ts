@@ -77,3 +77,63 @@ export function runTests(cwd: string, env: NodeJS.ProcessEnv = {}, grep?: string
   for (const s of report.suites) visit(s, []);
   return summary;
 }
+
+// ---------- Passo 5: esecuzioni ripetute per scovare i test flaky ----------
+
+export interface TestStats {
+  id: string;
+  title: string;
+  file: string;
+  line: number;
+  runs: number;
+  passes: number;
+  /** Messaggi d'errore distinti visti nelle esecuzioni fallite. */
+  errors: string[];
+  errorContext?: string;
+}
+
+/**
+ * Esegue ogni test `repeatEach` volte e conta i successi.
+ * Un test è flaky se 0 < passes < runs: stesso codice, stesso ambiente, risultato diverso.
+ * Anche qui niente LLM: è pura statistica.
+ */
+export function runRepeated(cwd: string, repeatEach: number): TestStats[] {
+  const out = join(cwd, 'test-results', 'orchestrator-repeat.json');
+  spawnSync('npx', ['playwright', 'test', '--reporter=json', '--trace=off', '--retries=0', `--repeat-each=${repeatEach}`], {
+    cwd,
+    env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: out },
+    stdio: 'ignore',
+  });
+  if (!existsSync(out)) throw new Error('Playwright non ha prodotto il report JSON');
+  const report = JSON.parse(readFileSync(out, 'utf8'));
+
+  const stats: TestStats[] = [];
+  const visit = (suite: JsonSuite, path: string[]) => {
+    for (const spec of suite.specs ?? []) {
+      const s: TestStats = {
+        id: spec.id,
+        title: [...path, spec.title].filter(Boolean).join(' › '),
+        file: spec.file,
+        line: spec.line,
+        runs: 0,
+        passes: 0,
+        errors: [],
+      };
+      for (const t of spec.tests) {
+        if (t.status === 'skipped') continue;
+        s.runs++;
+        if (t.status === 'expected') s.passes++;
+        else {
+          const last = t.results.at(-1);
+          const msg = stripAnsi(last?.error?.message ?? 'errore sconosciuto').slice(0, 800);
+          if (!s.errors.includes(msg)) s.errors.push(msg);
+          s.errorContext ??= last?.attachments?.find((a) => a.name === 'error-context')?.path;
+        }
+      }
+      stats.push(s);
+    }
+    for (const child of suite.suites ?? []) visit(child, [...path, child.title]);
+  };
+  for (const s of report.suites) visit(s, []);
+  return stats;
+}

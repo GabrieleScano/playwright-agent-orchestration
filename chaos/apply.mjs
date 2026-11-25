@@ -3,6 +3,8 @@
 //
 //   npm run chaos -- rename-button   → cambio di UI legittimo (il bottone "Entra" diventa "Login")
 //   npm run chaos -- price-bug       → bug vero (il totale perde i centesimi)
+//   npm run chaos -- slow-cart       → il carrello si aggiorna in modo asincrono (a volte 200 ms),
+//                                      come se chiamasse un'API: legittimo, ma smaschera i test fragili
 //   npm run chaos -- rename-button,price-bug
 //   npm run chaos:reset              → ripristina l'app (git checkout demo-app)
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -12,6 +14,7 @@ const root = join(import.meta.dirname, '..', 'demo-app', 'public');
 const mutations = {
   'rename-button': { file: 'index.html', from: '>Entra</button>', to: '>Login</button>' },
   'price-bug': { file: 'app.js', from: 'sum + p.price', to: 'sum + Math.floor(p.price)' },
+  'slow-cart': { file: 'app.js', from: 'cart.push(p); render();', to: 'cart.push(p); Math.random() < 0.2 ? setTimeout(render, 200) : render();' },
 };
 
 const wanted = (process.argv[2] ?? '').split(',').filter(Boolean);

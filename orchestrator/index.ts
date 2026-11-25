@@ -23,6 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ClaudeCodeEngine, type AgentEngine } from './engine.js';
 import { runTests, type Failure, type RunSummary } from './runner.js';
+import { log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
 const engine: AgentEngine = new ClaudeCodeEngine({ cwd, mcpConfig: join(cwd, '.mcp.json') });
@@ -52,21 +53,6 @@ const verdictSchema = {
 };
 
 let totalCost = 0;
-const log = (msg: string) => console.log(`[${new Date().toLocaleTimeString('it-IT')}] ${msg}`);
-
-/** Esegue fn su ogni elemento, al massimo `limit` alla volta (fan-out controllato). */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
 
 // ---------- 1. Triage: un agente per fallimento, in parallelo (sola lettura) ----------
 async function triage(f: Failure): Promise<Verdict> {
