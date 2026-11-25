@@ -7,7 +7,11 @@
     "test": "playwright test",
     "demo": "node demo-app/server.mjs",
     "typecheck": "tsc",
-    "mcp:explore": "tsx agents/mcp-explore.ts"
+    "mcp:explore": "tsx agents/mcp-explore.ts",
+    "orchestrate": "tsx orchestrator/index.ts",
+    "chaos": "node chaos/apply.mjs",
+    "chaos:reset": "git checkout -- demo-app",
+    "flaky": "tsx orchestrator/flaky.ts"
   },
   "keywords": [],
   "author": "",
