@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 
 const root = join(import.meta.dirname, 'public');
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 4310);
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 
 http.createServer(async (req, res) => {

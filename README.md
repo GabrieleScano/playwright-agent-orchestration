@@ -75,6 +75,13 @@ npm run flaky                              # AGENTS=off npm run flaky → solo s
 
 Variabili: `AGENT_BUDGET_USD` (default 1), `TRIAGE_MODEL` (haiku), `HEAL_MODEL` (sonnet), `MAX_FAILURES` (10), `REPEAT` (10).
 
+### Se i test non partono
+- **Porta occupata:** l'app demo gira su `http://localhost:4310`. Se la porta è già in uso, Playwright si ferma con
+  `http://localhost:4310 is already used`. Chiudi l'altro processo, oppure scegli un'altra porta: `PORT=5000 npx playwright test --ui`
+  (su Windows PowerShell: `$env:PORT=5000; npx playwright test --ui`).
+- **Node:** serve almeno la versione 20.11 (consigliata la 22).
+- **Browser mancante:** `npx playwright install chromium`.
+
 ### In CI
 Il workflow [`e2e.yml`](.github/workflows/e2e.yml) esegue i test a ogni push e PR. Se falliscono e il secret
 `ANTHROPIC_API_KEY` è configurato, lancia l'orchestratore con budget $0.50 e pubblica il report nel riepilogo del job.

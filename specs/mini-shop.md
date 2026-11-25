@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-Mini Shop è una piccola app single-page (http://localhost:3000) con login simulato (qualsiasi email valida + password "segreta"), elenco di 3 prodotti (Tazza 8.50 €, Maglietta 19.90 €, Quaderno 4.25 €), carrello (contatore e totale) e pulsante "Vai al pagamento". Non esiste rimozione dal carrello e lo stato è solo in memoria (si perde al ricaricamento). Il piano copre login, carrello e checkout con casi negativi, in 8 scenari indipendenti. Ogni scenario parte da stato fresco (pagina di login appena caricata).
+Mini Shop è una piccola app single-page (http://localhost:4310) con login simulato (qualsiasi email valida + password "segreta"), elenco di 3 prodotti (Tazza 8.50 €, Maglietta 19.90 €, Quaderno 4.25 €), carrello (contatore e totale) e pulsante "Vai al pagamento". Non esiste rimozione dal carrello e lo stato è solo in memoria (si perde al ricaricamento). Il piano copre login, carrello e checkout con casi negativi, in 8 scenari indipendenti. Ogni scenario parte da stato fresco (pagina di login appena caricata).
 
 ## Test Scenarios
 
@@ -15,7 +15,7 @@ Mini Shop è una piccola app single-page (http://localhost:3000) con login simul
 **File:** `tests/login/login-valido.spec.ts`
 
 **Steps:**
-  1. Aprire http://localhost:3000/ (stato fresco dal seed)
+  1. Aprire http://localhost:4310/ (stato fresco dal seed)
     - expect: Si vede l'intestazione 'Mini Shop' con i campi Email, Password e il pulsante 'Accedi'
     - expect: La vista prodotti non è visibile
   2. Inserire l'email 'utente@example.com' e la password 'segreta', poi cliccare 'Accedi'
