@@ -10,9 +10,9 @@ test.describe('Carrello', () => {
     await page.getByRole('button', { name: 'Entra' }).click();
 
     await page.getByRole('button', { name: 'Aggiungi Tazza' }).click();
-    expect(await page.getByTestId('cart-count').textContent()).toBe('1');
+    await expect(page.getByTestId('cart-count')).toHaveText('1');
 
     await page.getByRole('button', { name: 'Aggiungi Maglietta' }).click();
-    expect(await page.getByTestId('cart-count').textContent()).toBe('2');
+    await expect(page.getByTestId('cart-count')).toHaveText('2');
   });
 });

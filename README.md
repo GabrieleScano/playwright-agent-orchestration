@@ -9,7 +9,7 @@ che pianificano, generano, riparano (self-healing) e classificano (triage) i tes
 - [x] **Passo 2** – Playwright MCP: un agente che pilota il browser
 - [x] **Passo 3** – Test agents di Playwright: planner, generator, healer
 - [x] **Passo 4** – Orchestratore multi-agente
-- [ ] **Passo 5** – Self-healing e triage dei fallimenti
+- [x] **Passo 5** – Caccia ai test flaky
 - [ ] **Passo 6** – CI, report e documentazione dell'architettura
 
 ## Avvio rapido
@@ -22,6 +22,7 @@ npm run demo          # solo l'app demo su http://localhost:3000
 npx playwright show-report
 npm run mcp:explore   # (con la demo avviata) parla con Playwright MCP come farebbe un agente
 npm run chaos -- rename-button,price-bug && npm run orchestrate   # orchestratore multi-agente
+npm run chaos -- slow-cart && npm run flaky                        # caccia ai test flaky
 ```
 
 ## Struttura
@@ -66,3 +67,10 @@ sola lettura, risposta JSON) → **router** (regole in codice) → **healer** (s
 **bug report**. I guardrail finali impediscono di "riparare" un test che sta rilevando un bug.
 Su un commit con un bottone rinominato e un bug nel totale, l'orchestratore ripara 4 test e segnala il bug
 con il 97% di confidenza, lasciando rossi i 2 test giusti. Dettagli: [docs/passo-4.md](docs/passo-4.md).
+
+### Passo 5 – Caccia ai test flaky
+Ogni test gira 10 volte (statistica, niente LLM). Solo i test con risultati misti vanno all'agente
+**flaky-analyst**, che cerca la causa radice (`test_timing` / `app_race` / `environment`). L'healer corregge
+i problemi di timing con asserzioni web-first. Un guardrail sul diff blocca i "cerotti" (`waitForTimeout`,
+retry, skip), e una verifica ×20 conferma la stabilità. Esempio reale: un test 9/10 diventa 20/20 con un diff di 2 righe.
+Dettagli: [docs/passo-5.md](docs/passo-5.md).
