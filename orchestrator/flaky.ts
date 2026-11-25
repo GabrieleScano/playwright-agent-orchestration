@@ -21,12 +21,17 @@
 import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ClaudeCodeEngine, type AgentEngine } from './engine.js';
+import { BudgetedEngine, ClaudeCodeEngine } from './engine.js';
 import { runRepeated, type TestStats } from './runner.js';
 import { log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
-const engine: AgentEngine = new ClaudeCodeEngine({ cwd, mcpConfig: join(cwd, '.mcp.json') });
+const BUDGET_USD = Number(process.env.AGENT_BUDGET_USD ?? 1);
+const ANALYST_MODEL = process.env.TRIAGE_MODEL ?? 'haiku';
+const HEAL_MODEL = process.env.HEAL_MODEL ?? 'sonnet';
+/** AGENTS=off: solo statistica (gratis). Utile in CI senza API key. */
+const AGENTS_ON = process.env.AGENTS !== 'off';
+const engine = new BudgetedEngine(new ClaudeCodeEngine({ cwd, mcpConfig: join(cwd, '.mcp.json') }), BUDGET_USD);
 const REPEAT = Number(process.env.REPEAT ?? 10);
 const MIN_CONFIDENCE = 0.7;
 
@@ -55,7 +60,6 @@ const schema = {
 /** Pattern che indicano un "cerotto" invece di una correzione vera. */
 const BANDAIDS = [/waitForTimeout\s*\(/, /test\.(skip|fixme)\s*\(/, /retries\s*:/, /\.describe\.configure\(\s*\{\s*retries/];
 
-let totalCost = 0;
 const pct = (s: TestStats) => `${s.passes}/${s.runs}`;
 
 async function analyse(s: TestStats): Promise<Diagnosis> {
@@ -73,8 +77,8 @@ async function analyse(s: TestStats): Promise<Diagnosis> {
       allowedTools: ['Read', 'Glob', 'Grep', 'LS'],
       disallowedTools: ['Read(chaos/**)'],
       jsonSchema: schema,
+      model: ANALYST_MODEL,
     });
-    totalCost += res.costUsd;
     if (!res.data) throw new Error('risposta senza JSON');
     return res.data;
   } catch (e) {
@@ -95,8 +99,8 @@ async function heal(items: { s: TestStats; d: Diagnosis }[]): Promise<string> {
       'Alla fine elenca in italiano cosa hai cambiato.',
     allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)'],
     disallowedTools: ['Read(chaos/**)'],
+    model: HEAL_MODEL,
   });
-  totalCost += res.costUsd;
   return res.text;
 }
 
@@ -111,7 +115,19 @@ async function main() {
   const alwaysRed = before.filter((s) => s.runs > 0 && s.passes === 0);
   for (const s of before) log(`  ${s.passes === s.runs ? '✅' : s.passes === 0 ? '❌' : '🎲'} ${pct(s)}  ${s.title}`);
   if (alwaysRed.length) log(`  (${alwaysRed.length} test sempre rossi: non sono flaky, li gestisce \`npm run orchestrate\`)`);
-  if (!flaky.length) return log('✅ Nessun test flaky.');
+  const table = (list: TestStats[]) =>
+    ['| Test | Successi |', '|---|---|', ...list.map((s) => `| ${s.title} | ${pct(s)} |`)].join('\n');
+  if (!flaky.length)
+    return finish(reportDir, `# Report test flaky\n\n✅ Nessun test flaky su ${before.length} (×${REPEAT}). Nessun agente chiamato, costo $0.\n`);
+
+  // Modalità solo statistica: sappiamo QUALI test sono flaky, ma non PERCHÉ. Costo zero.
+  if (!AGENTS_ON) {
+    return finish(
+      reportDir,
+      `# Report test flaky (solo statistica)\n\n> 🎲 ${flaky.length} test flaky su ${before.length} (×${REPEAT}). ` +
+        `Agenti disattivati (AGENTS=off): nessuna diagnosi, costo $0.\n\n${table(flaky)}\n`,
+    );
+  }
 
   log(`▶ Analisi: ${flaky.length} test flaky`);
   const diagnoses = await mapLimit(flaky, 3, async (s) => {
@@ -134,7 +150,11 @@ async function main() {
   let healerNotes = '';
   if (toHeal.length) {
     log(`▶ Healer: stabilizzo ${toHeal.length} test`);
-    healerNotes = await heal(toHeal);
+    try {
+      healerNotes = await heal(toHeal);
+    } catch (e) {
+      healerNotes = `⚠️ Healer non eseguito: ${(e as Error).message.split('\n')[0]}`;
+    }
   }
 
   // ---------- Guardrail 1: il diff non deve contenere cerotti ----------
@@ -169,7 +189,7 @@ async function main() {
 
 - **Esecuzioni per test:** ${REPEAT} (verifica: ${REPEAT * 2})
 - **Test flaky trovati:** ${flaky.length} su ${before.length}
-- **Durata:** ${Math.round((Date.now() - started) / 1000)} s · **Costo LLM stimato:** $${totalCost.toFixed(2)}
+- **Durata:** ${Math.round((Date.now() - started) / 1000)} s · **Costo LLM:** $${engine.spent.toFixed(3)} (budget $${BUDGET_USD.toFixed(2)})
 
 ${warnings.map((w) => `> ⚠️ ${w}`).join('\n') || '> ✅ Nessun guardrail violato: nessun cerotto, test stabili alla verifica.'}
 
@@ -180,6 +200,9 @@ ${rows}
 ## Diagnosi dettagliate
 ${diagnoses.map(({ s, d }) => `### ${s.title}\n**Prove:** ${d.evidence}\n\n**Fix proposto:** ${d.fix}`).join('\n\n')}
 
+## Costi per agente
+${engine.costTable()}
+
 ## Note dell'healer
 ${healerNotes || '_nessun intervento_'}
 
@@ -188,9 +211,15 @@ ${healerNotes || '_nessun intervento_'}
 ${diff || '(nessuna modifica)'}
 \`\`\`
 `;
-  writeFileSync(join(reportDir, 'report.md'), report);
-  log(`📄 Report: ${join(reportDir, 'report.md')} (costo ~$${totalCost.toFixed(2)})`);
+  finish(reportDir, report);
   warnings.forEach((w) => log(`⚠️ ${w}`));
+}
+
+/** Scrive il report nella cartella dell'esecuzione e in reports/latest-flaky.md (comodo in CI). */
+function finish(reportDir: string, report: string) {
+  writeFileSync(join(reportDir, 'report.md'), report);
+  writeFileSync(join(cwd, 'reports', 'latest-flaky.md'), report);
+  log(`📄 Report: ${join(reportDir, 'report.md')} (costo $${engine.spent.toFixed(3)})`);
 }
 
 main().catch((e) => {

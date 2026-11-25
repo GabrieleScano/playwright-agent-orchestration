@@ -1,0 +1,155 @@
+# Pipeline E2E con agenti "a consumo":
+#
+#   push / PR          → test (gratis) ──rosso?──▶ triage + healer (solo se c'è la API key, con budget)
+#   notte / a mano     → caccia ai flaky (statistica gratis; diagnosi solo con la API key)
+#
+# Pipeline verde = zero token. Gli agenti partono solo quando qualcosa è rotto.
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *' # ogni notte alle 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      chaos:
+        description: 'Mutazioni da applicare per la demo (es. rename-button,price-bug oppure slow-cart). Vuoto = nessuna.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHAOS: ${{ inputs.chaos }}
+  # Controllo dei costi: tetto per esecuzione e modelli per ruolo.
+  AGENT_BUDGET_USD: '0.50'
+  TRIAGE_MODEL: haiku
+  HEAL_MODEL: sonnet
+  MAX_FAILURES: '10'
+
+jobs:
+  test:
+    name: Test Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      failed: ${{ steps.run.outcome == 'failure' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx tsc
+      - name: Applica chaos (solo demo manuale)
+        if: env.CHAOS != ''
+        run: npm run chaos -- "$CHAOS"
+      - name: Esegui i test
+        id: run
+        continue-on-error: true
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - name: Esito
+        if: steps.run.outcome == 'failure'
+        run: |
+          echo "### ❌ Test falliti: l'orchestratore partirà nel job successivo" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  orchestrate:
+    name: Triage e self-healing con agenti
+    needs: test
+    if: always() && needs.test.outputs.failed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Controlla la API key
+        id: key
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "### 🤖 Agenti disattivati" >> "$GITHUB_STEP_SUMMARY"
+            echo "Aggiungi il secret \`ANTHROPIC_API_KEY\` per attivare triage e self-healing automatici." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.enabled == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.enabled == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installa dipendenze, browser e Claude Code
+        if: steps.key.outputs.enabled == 'true'
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm install -g @anthropic-ai/claude-code
+      - name: Applica chaos (solo demo manuale)
+        if: steps.key.outputs.enabled == 'true' && env.CHAOS != ''
+        run: npm run chaos -- "$CHAOS"
+      - name: Orchestratore
+        if: steps.key.outputs.enabled == 'true'
+        run: |
+          npm run orchestrate
+          cat reports/latest.md >> "$GITHUB_STEP_SUMMARY"
+          git diff -- tests > reports/healer.patch
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.key.outputs.enabled == 'true'
+        with:
+          name: orchestrator-report
+          # healer.patch contiene le correzioni proposte: in CI non vengono mai committate da sole.
+          path: reports/
+          retention-days: 14
+
+  flaky:
+    name: Caccia ai test flaky
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      REPEAT: '10'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Installa Claude Code (solo con la API key)
+        if: env.ANTHROPIC_API_KEY != ''
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Applica chaos (solo demo manuale)
+        if: env.CHAOS != ''
+        run: npm run chaos -- "$CHAOS"
+      - name: Caccia ai flaky
+        run: |
+          # Senza API key: solo statistica (gratis). Con la key: anche diagnosi e correzione.
+          if [ -z "$ANTHROPIC_API_KEY" ]; then export AGENTS=off; fi
+          npm run flaky
+          cat reports/latest-flaky.md >> "$GITHUB_STEP_SUMMARY"
+          git diff -- tests > reports/healer.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flaky-report
+          path: reports/
+          retention-days: 14
