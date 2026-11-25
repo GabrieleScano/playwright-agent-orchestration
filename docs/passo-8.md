@@ -1,5 +1,8 @@
 # Passo 8 – Page Object Model: un locator, un posto
 
+> **Nota (pulizia dopo il Passo 8):** `tests/cart/contatore.spec.ts` è stato poi rimosso perché duplicava lo
+> scenario "Prodotti diversi" di `carrello.feature`. Le fixture funzionano allo stesso modo per un test classico.
+
 Nel Passo 7 i locator stavano in un oggetto `ui` dentro le step definitions BDD. Il test classico
 `contatore.spec.ts` però aveva i suoi, copiati. Con un bottone rinominato andavano corretti **due** posti.
 Il **Page Object Model (POM)** risolve questo: ogni pagina dell'app ha una classe che sa *come* usarla,
@@ -77,7 +80,6 @@ Le step definitions ora **non hanno nessun locator**: solo chiamate ai page obje
 | `failure-triage` | se il problema è un locator, `suggested_fix` indica **page object e proprietà** (`LoginPage.submit`), non il test |
 | healer | può modificare `pages/**`; i locator si correggono **solo** nei page object |
 | `bdd-generator` | riusa le fixture; un locator nuovo va nel page object giusto, mai negli step |
-| `playwright-test-generator` | importa `test` da `pages/fixtures.js` e usa le fixture |
 
 **Guardrail nuovo** (`locatorsOutsidePages()` in [util.ts](../orchestrator/util.ts)): dopo ogni intervento
 l'orchestratore guarda il diff di `tests/` e `features/steps/`. Se un agente ha aggiunto `page.getBy…` o

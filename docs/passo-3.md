@@ -1,5 +1,10 @@
 # Passo 3 – I test agents di Playwright
 
+> **Nota (pulizia dopo il Passo 8):** planner e generator classici, il piano `specs/mini-shop.md` e i test che
+> ne derivavano sono stati sostituiti da `bdd-planner`, `bdd-generator` e dai file `.feature` (Passo 7).
+> Resta l'healer. Questo passo racconta com'era: i file rimossi sono nella cronologia git
+> (`git show 09386f7:specs/mini-shop.md`).
+
 `npx playwright init-agents --loop=claude` crea tre **subagenti** in `.claude/agents/`.
 Ognuno è un file Markdown: un *system prompt* (il ruolo) più la lista dei *tool* MCP che può usare.
 Il server MCP è `playwright run-test-mcp-server` (in `.mcp.json`), che oltre ai tool `browser_*`

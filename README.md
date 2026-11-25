@@ -39,7 +39,6 @@ riparare le step definitions ma mai i requisiti, e i locator vivono solo nei **p
 | `playwright-test-healer` | agente | sonnet | modifica solo `pages/**`, `tests/**` e `features/steps/**`, **mai** i `.feature` |
 | `bdd-planner` | agente | sonnet | scrive solo `.feature` nuovi, in italiano |
 | `bdd-generator` | agente | sonnet | scrive solo in `features/steps/**` e `pages/**` |
-| `playwright-test-planner` / `generator` | agente | sonnet | su richiesta, per nuovi test classici |
 
 ## Risultati misurati
 
@@ -120,7 +119,6 @@ demo-app/            app da testare (HTML/JS statico + mini server Node)
 features/            scenari BDD in Gherkin italiano (*.feature) + step definitions (steps/)
 pages/               page object (LoginPage, ShopPage) + fixture condivise da test e step
 tests/               test Playwright classici
-specs/               piani di test scritti dal planner
 orchestrator/        engine LLM intercambiabile + budget, runner, triage/router/healer, flaky, bdd
 .claude/agents/      definizioni degli agenti (ruolo + tool consentiti)
 chaos/               simula commit che rompono l'app
