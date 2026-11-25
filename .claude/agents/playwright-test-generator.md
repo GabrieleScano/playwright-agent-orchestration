@@ -57,3 +57,8 @@ application behavior.
    });
    ```
    </example-generation>
+## Regole di questo progetto (Page Object Model)
+- Importa `test` ed `expect` da `../../pages/fixtures.js` (non da `@playwright/test`) e usa le fixture
+  `loginPage` e `shopPage` invece di scrivere locator nel test.
+- Se serve un locator che i page object non hanno ancora, nel test scrivi la chiamata al metodo che servirebbe
+  e segnala alla fine quale metodo aggiungere in `pages/`.

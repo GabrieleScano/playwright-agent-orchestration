@@ -23,7 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BudgetedEngine, BudgetExceededError, ClaudeCodeEngine } from './engine.js';
 import { runTests, where, type Failure, type RunSummary } from './runner.js';
-import { log, mapLimit } from './util.js';
+import { locatorsOutsidePages, log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
 
@@ -99,7 +99,10 @@ async function heal(items: { f: Failure; v: Verdict }[]): Promise<string> {
     agent: 'playwright-test-healer',
     prompt:
       `Ripara SOLO questi test, già diagnosticati come test fragili (l'app è corretta):\n${list}\n\n` +
-      "Non cambiare le asserzioni sui valori mostrati all'utente. Modifica solo file in tests/ e features/steps/. " +
+      "Non cambiare le asserzioni sui valori mostrati all'utente. Modifica solo file in pages/, tests/ e features/steps/. " +
+      // POM: i locator stanno nei page object. Un bottone rinominato si corregge lì, una volta sola.
+      'I locator vivono SOLO nei page object in pages/: se un locator è cambiato correggilo lì, ' +
+      'non aggiungere page.getBy… o page.locator nei test o negli step. ' +
       // BDD: il .feature è il requisito (il COSA), le step definitions sono il COME.
       'Per gli scenari BDD correggi SOLO le step definitions in features/steps/: i file .feature sono i requisiti ' +
       'concordati con il business e NON vanno mai modificati. ' +
@@ -107,7 +110,7 @@ async function heal(items: { f: Failure; v: Verdict }[]): Promise<string> {
       'NON usare test.fixme, test.skip o simili: se dopo la tua correzione il test fallisce per un altro motivo, ' +
       "lascialo fallire e descrivi il motivo. L'orchestratore farà un nuovo triage. " +
       'Alla fine elenca in italiano cosa hai cambiato.',
-    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)', 'Edit(features/steps/**)'],
+    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(pages/**)', 'Edit(tests/**)', 'Edit(features/steps/**)'],
     disallowedTools: ['Read(chaos/**)', 'Edit(features/**/*.feature)'],
     model: HEAL_MODEL,
   });
@@ -231,7 +234,7 @@ async function main() {
 
   // ---------- Guardrail finali ----------
   const stillFailing = new Set(current.failures.map((f) => f.id));
-  const warnings: string[] = [...specViolations];
+  const warnings: string[] = [...specViolations, ...locatorsOutsidePages(cwd)];
   const hiddenBugs = [...bugIds].filter((id) => !stillFailing.has(id));
   if (hiddenBugs.length) warnings.push(`${hiddenBugs.length} test che rilevano un bug sono diventati verdi: qualcuno ha nascosto il bug?`);
   if (current.skipped > first.skipped)

@@ -19,7 +19,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BudgetedEngine, ClaudeCodeEngine } from './engine.js';
 import { runTests } from './runner.js';
-import { log } from './util.js';
+import { locatorsOutsidePages, log } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
 const BUDGET_USD = Number(process.env.AGENT_BUDGET_USD ?? 2);
@@ -96,10 +96,11 @@ async function main() {
         `Implementa le step definitions mancanti per ${newFeatures.join(', ')}.\n` +
         `Output di bddgen:\n${gap.output}\n\n` +
         `Per verificare i locator apri l'app su ${EXPLORE_URL}. ` +
-        'Riusa `ui` e `login` di features/steps/minishop.steps.ts. Non toccare i file .feature.',
+        'Riusa i page object in pages/ (fixture loginPage, shopPage): se serve un locator nuovo aggiungilo lì, ' +
+        'mai page.getBy… negli step. Non toccare i file .feature.',
       allowedTools: [
         'mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS',
-        'Edit(features/steps/**)', 'Bash(npx bddgen)',
+        'Edit(pages/**)', 'Edit(features/steps/**)', 'Bash(npx bddgen)',
       ],
       disallowedTools: ['Read(chaos/**)', 'Edit(features/**/*.feature)'],
       model: MODEL,
@@ -113,7 +114,8 @@ async function main() {
     warnings.push(`Il generator ha toccato il requisito \`${f}\`: ripristinato.`);
     sh(`git checkout -- "${f}"`);
   }
-  const stepDiff = sh('git diff -U0 -- features/steps') + '\n' +
+  warnings.push(...locatorsOutsidePages(cwd));
+  const stepDiff = sh('git diff -U0 -- pages features/steps') + '\n' +
     lines(sh('git ls-files --others --exclude-standard features/steps')).map((f) => sh(`cat "${f}"`).replace(/^/gm, '+')).join('\n');
   for (const l of stepDiff.split('\n').filter((l) => l.startsWith('+')))
     if (BANDAIDS.some((re) => re.test(l))) warnings.push(`Cerotto nello step: \`${l.slice(1).trim()}\``);

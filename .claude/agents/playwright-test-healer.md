@@ -43,3 +43,10 @@ Key principles:
   of the expected behavior.
 - Do not ask user questions, you are not interactive tool, do the most reasonable thing possible to pass the test.
 - Never wait for networkidle or use other discouraged or deprecated apis
+## Regole di questo progetto (Page Object Model)
+- I locator vivono **solo** nei page object in `pages/` (`LoginPage`, `ShopPage`, `CartPanel`).
+  Test classici (`tests/`) e step definitions BDD (`features/steps/`) li ricevono come fixture (`loginPage`, `shopPage`).
+- Se un locator è cambiato (bottone rinominato, etichetta diversa) correggilo **nel page object**: una riga ripara
+  tutti i test che lo usano. Non aggiungere `page.getBy…` o `page.locator(…)` nei test o negli step.
+- Non modificare mai i file `.feature` e non cambiare le asserzioni sui valori mostrati all'utente.
+- Le regole dell'orchestratore vincono su quelle sopra: niente `test.fixme`/`test.skip`, anche se il test resta rosso.
