@@ -3,9 +3,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Carrello', () => {
-  // BUG APP: il totale del carrello arrotonda i prezzi per difetto (Math.floor in
-  // demo-app/public/app.js): mostra 12.00 invece di 12.75. Riabilitare dopo il fix dell'app.
-  test.fixme('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
+  test('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
     await page.goto('/');
 
     // 1. Effettuare il login e cliccare 'Aggiungi Quaderno' 3 volte

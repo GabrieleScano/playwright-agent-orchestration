@@ -12,9 +12,7 @@ test.describe('Mini Shop', () => {
     await expect(page.getByRole('alert')).toHaveText('Credenziali non valide');
   });
 
-  // BUG APP: il totale del carrello arrotonda i prezzi per difetto (Math.floor in
-  // demo-app/public/app.js): mostra 12.00 invece di 12.75. Riabilitare dopo il fix dell'app.
-  test.fixme('utente aggiunge prodotti e conclude l\'ordine', async ({ page }) => {
+  test('utente aggiunge prodotti e conclude l\'ordine', async ({ page }) => {
     await page.getByLabel('Email').fill('gabri@example.com');
     await page.getByLabel('Password').fill('segreta');
     await page.getByRole('button', { name: 'Entra' }).click();
