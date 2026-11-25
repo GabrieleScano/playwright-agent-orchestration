@@ -22,7 +22,7 @@ import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BudgetedEngine, BudgetExceededError, ClaudeCodeEngine } from './engine.js';
-import { runTests, type Failure, type RunSummary } from './runner.js';
+import { runTests, where, type Failure, type RunSummary } from './runner.js';
 import { log, mapLimit } from './util.js';
 
 const cwd = resolve(import.meta.dirname, '..');
@@ -68,7 +68,7 @@ async function triage(f: Failure): Promise<Verdict> {
   const prompt = [
     'Classifica questo test fallito.',
     `Test: ${f.title}`,
-    `File: tests/${f.file}:${f.line}`,
+    `File: ${where(f)}`,
     f.errorContext ? `Snapshot della pagina al fallimento: ${f.errorContext}` : '',
     `Errore:\n${f.error}`,
   ].join('\n');
@@ -93,30 +93,51 @@ async function triage(f: Failure): Promise<Verdict> {
 // ---------- 2. Healer: UNA sola istanza per tutti i test fragili (scrive file) ----------
 async function heal(items: { f: Failure; v: Verdict }[]): Promise<string> {
   const list = items
-    .map(({ f, v }) => `- tests/${f.file}:${f.line} "${f.title}"\n  Diagnosi del triage: ${v.summary}\n  Fix suggerito: ${v.suggested_fix}`)
+    .map(({ f, v }) => `- ${where(f)} "${f.title}"\n  Diagnosi del triage: ${v.summary}\n  Fix suggerito: ${v.suggested_fix}`)
     .join('\n');
   const res = await engine.run({
     agent: 'playwright-test-healer',
     prompt:
       `Ripara SOLO questi test, già diagnosticati come test fragili (l'app è corretta):\n${list}\n\n` +
-      "Non cambiare le asserzioni sui valori mostrati all'utente. Modifica solo file in tests/. " +
+      "Non cambiare le asserzioni sui valori mostrati all'utente. Modifica solo file in tests/ e features/steps/. " +
+      // BDD: il .feature è il requisito (il COSA), le step definitions sono il COME.
+      'Per gli scenari BDD correggi SOLO le step definitions in features/steps/: i file .feature sono i requisiti ' +
+      'concordati con il business e NON vanno mai modificati. ' +
       // Decidere che un test rileva un bug è compito del triage, non dell'healer:
       'NON usare test.fixme, test.skip o simili: se dopo la tua correzione il test fallisce per un altro motivo, ' +
       "lascialo fallire e descrivi il motivo. L'orchestratore farà un nuovo triage. " +
       'Alla fine elenca in italiano cosa hai cambiato.',
-    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)'],
-    disallowedTools: ['Read(chaos/**)'],
+    allowedTools: ['mcp__playwright-test', 'Read', 'Glob', 'Grep', 'LS', 'Edit(tests/**)', 'Edit(features/steps/**)'],
+    disallowedTools: ['Read(chaos/**)', 'Edit(features/**/*.feature)'],
     model: HEAL_MODEL,
   });
   return res.text;
 }
 
+// ---------- Guardrail BDD: i .feature sono i requisiti, gli agenti non li toccano ----------
+/**
+ * Il permesso `Edit(features/**\/*.feature)` è già negato all'healer, ma non ci fidiamo solo dei permessi:
+ * dopo ogni intervento controlliamo il diff e annulliamo qualsiasi modifica a un .feature.
+ * Cambiare un requisito è una decisione di business, non una riparazione.
+ */
+function protectFeatureFiles(): string[] {
+  const changed = execSync("git diff --name-only -- 'features/*.feature' 'features/**/*.feature'", { cwd })
+    .toString()
+    .split('\n')
+    .filter(Boolean);
+  for (const file of changed) {
+    execSync(`git checkout -- "${file}"`, { cwd });
+    log(`  🛡️ Annullata la modifica a ${file}: i requisiti non si toccano`);
+  }
+  return changed.map((file) => `L'healer ha provato a modificare il requisito \`${file}\`: modifica annullata.`);
+}
+
 // ---------- 3. Bug report: deterministico, nessun LLM necessario ----------
 function writeBugReport(dir: string, f: Failure, v: Verdict): string {
-  const name = `bug-${f.id.slice(0, 8)}.md`;
+  const name = `bug-${f.id}.md`;
   writeFileSync(
     join(dir, name),
-    `# 🐞 ${v.summary}\n\n- **Test che lo rileva:** \`tests/${f.file}:${f.line}\` – ${f.title}\n` +
+    `# 🐞 ${v.summary}\n\n- **Test che lo rileva:** \`${where(f)}\` – ${f.title}\n` +
       `- **Confidenza del triage:** ${Math.round(v.confidence * 100)}%\n\n## Prove\n${v.evidence}\n\n` +
       `## Fix suggerito\n${v.suggested_fix}\n\n## Errore originale\n\`\`\`\n${f.error}\n\`\`\`\n`,
   );
@@ -160,6 +181,7 @@ async function main() {
   const bugIds = new Set<string>(); // test che rilevano un bug: devono restare rossi
   const humanIds = new Set<string>(); // test lasciati a una persona
   const healerNotes: string[] = [];
+  const specViolations: string[] = []; // modifiche (annullate) ai .feature
   let current: RunSummary = first;
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
@@ -192,6 +214,7 @@ async function main() {
       log(`▶ Healer: riparo ${toHeal.length} test fragili`);
       try {
         healerNotes.push(`### Giro ${round}\n${await heal(toHeal)}`);
+        specViolations.push(...protectFeatureFiles());
       } catch (e) {
         // Budget esaurito o agente fallito: i test restano rossi e senza diagnosi, il guardrail lo segnala.
         healerNotes.push(`### Giro ${round}\n⚠️ Healer non eseguito: ${(e as Error).message.split('\n')[0]}`);
@@ -208,7 +231,7 @@ async function main() {
 
   // ---------- Guardrail finali ----------
   const stillFailing = new Set(current.failures.map((f) => f.id));
-  const warnings: string[] = [];
+  const warnings: string[] = [...specViolations];
   const hiddenBugs = [...bugIds].filter((id) => !stillFailing.has(id));
   if (hiddenBugs.length) warnings.push(`${hiddenBugs.length} test che rilevano un bug sono diventati verdi: qualcuno ha nascosto il bug?`);
   if (current.skipped > first.skipped)
