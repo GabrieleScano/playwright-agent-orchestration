@@ -19,6 +19,8 @@ export interface AgentTask {
   /** Se presente, l'agente DEVE rispondere con un JSON valido per questo schema. */
   jsonSchema?: object;
   model?: string;
+  /** Tetto di spesa per questa singola chiamata (in dollari). */
+  maxBudgetUsd?: number;
 }
 
 export interface AgentResult<T = unknown> {
@@ -46,6 +48,8 @@ export class ClaudeCodeEngine implements AgentEngine {
       '--allowedTools', ...task.allowedTools,
     ];
     if (task.disallowedTools?.length) args.push('--disallowedTools', ...task.disallowedTools);
+    if (task.maxBudgetUsd !== undefined && Number.isFinite(task.maxBudgetUsd))
+      args.push('--max-budget-usd', task.maxBudgetUsd.toFixed(2));
     if (task.jsonSchema) args.push('--json-schema', JSON.stringify(task.jsonSchema));
 
     return new Promise((resolve, reject) => {
@@ -71,5 +75,55 @@ export class ClaudeCodeEngine implements AgentEngine {
         }
       });
     });
+  }
+}
+
+// ---------- Passo 6: tetto di spesa ----------
+
+export class BudgetExceededError extends Error {}
+
+/**
+ * Decorator: avvolge un qualsiasi AgentEngine e impone un tetto di spesa per esecuzione.
+ * - prima di ogni chiamata controlla il budget residuo (se è finito, non chiama l'LLM);
+ * - passa il residuo all'engine (`--max-budget-usd`), così anche una singola chiamata non può sforare;
+ * - tiene un registro dei costi per agente, da mostrare nel report.
+ * L'orchestratore non cambia: vede sempre e solo un AgentEngine.
+ */
+export class BudgetedEngine implements AgentEngine {
+  readonly ledger: { agent: string; model: string; costUsd: number }[] = [];
+
+  constructor(
+    private readonly inner: AgentEngine,
+    readonly budgetUsd: number,
+  ) {}
+
+  get spent() {
+    return this.ledger.reduce((sum, e) => sum + e.costUsd, 0);
+  }
+
+  async run<T>(task: AgentTask): Promise<AgentResult<T>> {
+    const remaining = this.budgetUsd - this.spent;
+    if (remaining <= 0.01) throw new BudgetExceededError(`Budget di $${this.budgetUsd.toFixed(2)} esaurito`);
+    const res = await this.inner.run<T>({ ...task, maxBudgetUsd: Math.min(task.maxBudgetUsd ?? Infinity, remaining) });
+    this.ledger.push({ agent: task.agent, model: task.model ?? 'sonnet', costUsd: res.costUsd });
+    return res;
+  }
+
+  /** Tabella Markdown dei costi per agente. */
+  costTable(): string {
+    const byAgent = new Map<string, { calls: number; cost: number; model: string }>();
+    for (const e of this.ledger) {
+      const row = byAgent.get(e.agent) ?? { calls: 0, cost: 0, model: e.model };
+      row.calls++;
+      row.cost += e.costUsd;
+      byAgent.set(e.agent, row);
+    }
+    const rows = [...byAgent].map(([agent, r]) => `| ${agent} | ${r.model} | ${r.calls} | $${r.cost.toFixed(3)} |`);
+    return [
+      '| Agente | Modello | Chiamate | Costo |',
+      '|---|---|---|---|',
+      ...rows,
+      `| **Totale** | | **${this.ledger.length}** | **$${this.spent.toFixed(3)}** su un budget di $${this.budgetUsd.toFixed(2)} |`,
+    ].join('\n');
   }
 }
