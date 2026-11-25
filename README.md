@@ -6,7 +6,7 @@ che pianificano, generano, riparano (self-healing) e classificano (triage) i tes
 ## Roadmap
 
 - [x] **Passo 1** – Progetto Playwright + app demo (Mini Shop) con i primi test
-- [ ] **Passo 2** – Playwright MCP: un agente che pilota il browser
+- [x] **Passo 2** – Playwright MCP: un agente che pilota il browser
 - [ ] **Passo 3** – Test agents di Playwright: planner, generator, healer
 - [ ] **Passo 4** – Orchestratore multi-agente
 - [ ] **Passo 5** – Self-healing e triage dei fallimenti
@@ -20,6 +20,7 @@ npx playwright install chromium
 npm test              # avvia l'app demo e lancia i test
 npm run demo          # solo l'app demo su http://localhost:3000
 npx playwright show-report
+npm run mcp:explore   # (con la demo avviata) parla con Playwright MCP come farebbe un agente
 ```
 
 ## Struttura
@@ -27,5 +28,22 @@ npx playwright show-report
 ```
 demo-app/            app da testare (HTML/JS statico + mini server Node)
 tests/               test Playwright scritti a mano (la "baseline" umana)
+agents/              script e agenti che usano Playwright MCP
+.mcp.json            config per usare Playwright MCP da Claude Code / VS Code / Cursor
 playwright.config.ts config: avvia l'app con webServer, trace sui fallimenti
 ```
+
+## Concetti
+
+### Passo 2 – Playwright MCP
+Un agente AI non importa Playwright: parla con un **server MCP** che espone *tool*
+(`browser_navigate`, `browser_snapshot`, `browser_click`…) descritti da uno schema JSON.
+Il ciclo è sempre **osserva → decidi → agisci**:
+
+1. `browser_snapshot` restituisce l'accessibility tree in YAML con riferimenti `[ref=e7]`.
+2. L'LLM sceglie l'elemento leggendo ruoli e nomi (`textbox "Email"`), non selettori CSS.
+3. Chiama il tool con `target: "e7"`; il server risponde con il codice Playwright eseguito
+   (`page.getByRole('textbox', { name: 'Email' }).fill(...)`).
+
+`agents/mcp-explore.ts` esegue questo ciclo con decisioni scritte a mano, per vedere
+esattamente cosa riceve l'agente. Gli errori dei tool tornano come testo: un LLM li legge e si corregge.

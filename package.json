@@ -6,14 +6,18 @@
   "scripts": {
     "test": "playwright test",
     "demo": "node demo-app/server.mjs",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "mcp:explore": "tsx agents/mcp-explore.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@playwright/mcp": "^0.0.86",
     "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.10",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "type": "module"
