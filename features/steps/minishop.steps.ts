@@ -19,6 +19,7 @@ const ui = {
   addButton: (page: Page, product: string) => page.getByRole('button', { name: `Aggiungi ${product}` }),
   cartCount: (page: Page) => page.getByTestId('cart-count'),
   cartTotal: (page: Page) => page.getByTestId('cart-total'),
+  productRow: (page: Page, product: string) => page.getByRole('listitem').filter({ hasText: product }),
 };
 
 async function login(page: Page, email: string, password: string) {
@@ -78,6 +79,10 @@ Then('il carrello contiene {int} articoli', async ({ page }, count: number) => {
 
 Then('il totale è {string} €', async ({ page }, total: string) => {
   await expect(ui.cartTotal(page)).toHaveText(total);
+});
+
+Then('vedo il prodotto {string} al prezzo di {string} €', async ({ page }, product: string, price: string) => {
+  await expect(ui.productRow(page, product)).toContainText(`${product} · ${price} €`);
 });
 
 Then('vedo lo stato {string}', async ({ page }, text: string) => {
