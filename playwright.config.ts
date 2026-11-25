@@ -10,7 +10,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     // Opzionale: usa un Chromium già installato (es. in ambienti senza download).
     launchOptions: process.env.PW_CHROMIUM_PATH
-      ? { executablePath: process.env.PW_CHROMIUM_PATH }
+      ? { executablePath: process.env.PW_CHROMIUM_PATH, chromiumSandbox: false }
       : {},
   },
   // Playwright avvia da solo l'app demo prima dei test.
