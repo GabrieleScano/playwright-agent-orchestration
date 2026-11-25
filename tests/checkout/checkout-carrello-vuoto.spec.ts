@@ -9,7 +9,7 @@ test.describe('Checkout', () => {
     // 1. Effettuare il login e, senza aggiungere prodotti, cliccare 'Vai al pagamento'
     await page.getByRole('textbox', { name: 'Email' }).fill('utente@example.com');
     await page.getByRole('textbox', { name: 'Password' }).fill('segreta');
-    await page.getByRole('button', { name: 'Accedi' }).click();
+    await page.getByRole('button', { name: 'Entra' }).click();
 
     const vaiAlPagamento = page.getByRole('button', { name: 'Vai al pagamento' });
     const stato = page.getByRole('status');

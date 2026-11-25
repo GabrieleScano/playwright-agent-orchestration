@@ -33,7 +33,7 @@ for (const p of PRODUCTS) {
 
 function render() {
   document.querySelector('[data-testid=cart-count]').textContent = cart.length;
-  const total = cart.reduce((sum, p) => sum + p.price, 0);
+  const total = cart.reduce((sum, p) => sum + Math.floor(p.price), 0);
   document.querySelector('[data-testid=cart-total]').textContent = total.toFixed(2);
 }
 

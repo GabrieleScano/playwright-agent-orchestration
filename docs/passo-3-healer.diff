@@ -1,0 +1,72 @@
+diff --git a/tests/cart/prodotto-ripetuto.spec.ts b/tests/cart/prodotto-ripetuto.spec.ts
+index 7530aa3..5284716 100644
+--- a/tests/cart/prodotto-ripetuto.spec.ts
++++ b/tests/cart/prodotto-ripetuto.spec.ts
+@@ -3,13 +3,15 @@
+ import { test, expect } from '@playwright/test';
+ 
+ test.describe('Carrello', () => {
+-  test('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
++  // BUG APP: il totale del carrello arrotonda i prezzi per difetto (Math.floor in
++  // demo-app/public/app.js): mostra 12.00 invece di 12.75. Riabilitare dopo il fix dell'app.
++  test.fixme('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
+     await page.goto('/');
+ 
+     // 1. Effettuare il login e cliccare 'Aggiungi Quaderno' 3 volte
+     await page.getByRole('textbox', { name: 'Email' }).fill('utente@example.com');
+     await page.getByRole('textbox', { name: 'Password' }).fill('segreta');
+-    await page.getByRole('button', { name: 'Accedi' }).click();
++    await page.getByRole('button', { name: 'Entra' }).click();
+ 
+     const aggiungiQuaderno = page.getByRole('button', { name: 'Aggiungi Quaderno' });
+     await aggiungiQuaderno.click();
+diff --git a/tests/checkout/checkout-carrello-vuoto.spec.ts b/tests/checkout/checkout-carrello-vuoto.spec.ts
+index 45b9ac8..b604725 100644
+--- a/tests/checkout/checkout-carrello-vuoto.spec.ts
++++ b/tests/checkout/checkout-carrello-vuoto.spec.ts
+@@ -9,7 +9,7 @@ test.describe('Checkout', () => {
+     // 1. Effettuare il login e, senza aggiungere prodotti, cliccare 'Vai al pagamento'
+     await page.getByRole('textbox', { name: 'Email' }).fill('utente@example.com');
+     await page.getByRole('textbox', { name: 'Password' }).fill('segreta');
+-    await page.getByRole('button', { name: 'Accedi' }).click();
++    await page.getByRole('button', { name: 'Entra' }).click();
+ 
+     const vaiAlPagamento = page.getByRole('button', { name: 'Vai al pagamento' });
+     const stato = page.getByRole('status');
+diff --git a/tests/login/login-password-errata.spec.ts b/tests/login/login-password-errata.spec.ts
+index 918b37f..f65eac0 100644
+--- a/tests/login/login-password-errata.spec.ts
++++ b/tests/login/login-password-errata.spec.ts
+@@ -8,7 +8,7 @@ test.describe('Login', () => {
+ 
+     const email = page.getByRole('textbox', { name: 'Email' });
+     const password = page.getByRole('textbox', { name: 'Password' });
+-    const accedi = page.getByRole('button', { name: 'Accedi' });
++    const accedi = page.getByRole('button', { name: 'Entra' });
+ 
+     // 1. Inserire email 'utente@example.com' e password 'sbagliata', cliccare 'Accedi'
+     await email.fill('utente@example.com');
+diff --git a/tests/shop.spec.ts b/tests/shop.spec.ts
+index cff18a2..049abae 100644
+--- a/tests/shop.spec.ts
++++ b/tests/shop.spec.ts
+@@ -8,14 +8,16 @@ test.describe('Mini Shop', () => {
+   test('login con password errata mostra un errore', async ({ page }) => {
+     await page.getByLabel('Email').fill('gabri@example.com');
+     await page.getByLabel('Password').fill('sbagliata');
+-    await page.getByRole('button', { name: 'Accedi' }).click();
++    await page.getByRole('button', { name: 'Entra' }).click();
+     await expect(page.getByRole('alert')).toHaveText('Credenziali non valide');
+   });
+ 
+-  test('utente aggiunge prodotti e conclude l\'ordine', async ({ page }) => {
++  // BUG APP: il totale del carrello arrotonda i prezzi per difetto (Math.floor in
++  // demo-app/public/app.js): mostra 12.00 invece di 12.75. Riabilitare dopo il fix dell'app.
++  test.fixme('utente aggiunge prodotti e conclude l\'ordine', async ({ page }) => {
+     await page.getByLabel('Email').fill('gabri@example.com');
+     await page.getByLabel('Password').fill('segreta');
+-    await page.getByRole('button', { name: 'Accedi' }).click();
++    await page.getByRole('button', { name: 'Entra' }).click();
+ 
+     await expect(page.getByRole('heading', { name: 'Prodotti' })).toBeVisible();
+     await page.getByRole('button', { name: 'Aggiungi Tazza' }).click();

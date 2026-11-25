@@ -8,7 +8,7 @@ test.describe('Login', () => {
 
     const email = page.getByRole('textbox', { name: 'Email' });
     const password = page.getByRole('textbox', { name: 'Password' });
-    const accedi = page.getByRole('button', { name: 'Accedi' });
+    const accedi = page.getByRole('button', { name: 'Entra' });
 
     // 1. Inserire email 'utente@example.com' e password 'sbagliata', cliccare 'Accedi'
     await email.fill('utente@example.com');

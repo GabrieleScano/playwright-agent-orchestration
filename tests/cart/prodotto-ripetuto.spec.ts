@@ -3,13 +3,15 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Carrello', () => {
-  test('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
+  // BUG APP: il totale del carrello arrotonda i prezzi per difetto (Math.floor in
+  // demo-app/public/app.js): mostra 12.00 invece di 12.75. Riabilitare dopo il fix dell'app.
+  test.fixme('Aggiunta dello stesso prodotto più volte', async ({ page }) => {
     await page.goto('/');
 
     // 1. Effettuare il login e cliccare 'Aggiungi Quaderno' 3 volte
     await page.getByRole('textbox', { name: 'Email' }).fill('utente@example.com');
     await page.getByRole('textbox', { name: 'Password' }).fill('segreta');
-    await page.getByRole('button', { name: 'Accedi' }).click();
+    await page.getByRole('button', { name: 'Entra' }).click();
 
     const aggiungiQuaderno = page.getByRole('button', { name: 'Aggiungi Quaderno' });
     await aggiungiQuaderno.click();

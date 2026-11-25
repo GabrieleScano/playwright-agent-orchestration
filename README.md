@@ -7,7 +7,7 @@ che pianificano, generano, riparano (self-healing) e classificano (triage) i tes
 
 - [x] **Passo 1** – Progetto Playwright + app demo (Mini Shop) con i primi test
 - [x] **Passo 2** – Playwright MCP: un agente che pilota il browser
-- [ ] **Passo 3** – Test agents di Playwright: planner, generator, healer
+- [x] **Passo 3** – Test agents di Playwright: planner, generator, healer
 - [ ] **Passo 4** – Orchestratore multi-agente
 - [ ] **Passo 5** – Self-healing e triage dei fallimenti
 - [ ] **Passo 6** – CI, report e documentazione dell'architettura
@@ -29,7 +29,10 @@ npm run mcp:explore   # (con la demo avviata) parla con Playwright MCP come fare
 demo-app/            app da testare (HTML/JS statico + mini server Node)
 tests/               test Playwright scritti a mano (la "baseline" umana)
 agents/              script e agenti che usano Playwright MCP
-.mcp.json            config per usare Playwright MCP da Claude Code / VS Code / Cursor
+.mcp.json            server MCP: playwright (browser) e playwright-test (test agents)
+.claude/agents/      planner, generator, healer (generati da `npx playwright init-agents`)
+specs/               piani di test scritti dal planner
+docs/                spiegazione e risultati di ogni passo
 playwright.config.ts config: avvia l'app con webServer, trace sui fallimenti
 ```
 
@@ -47,3 +50,9 @@ Il ciclo è sempre **osserva → decidi → agisci**:
 
 `agents/mcp-explore.ts` esegue questo ciclo con decisioni scritte a mano, per vedere
 esattamente cosa riceve l'agente. Gli errori dei tool tornano come testo: un LLM li legge e si corregge.
+
+### Passo 3 – Test agents (planner, generator, healer)
+Tre subagenti con ruoli separati: il **planner** esplora l'app e scrive un piano, il **generator**
+esegue ogni scenario nel browser e lo trasforma in test, l'**healer** esegue i test rotti, li debugga e li ripara.
+Abbiamo rotto l'app apposta (un bottone rinominato + un bug sul totale): l'healer ha riparato i locator
+ma ha marcato come `fixme` i test che rilevavano il bug vero. Dettagli: [docs/passo-3.md](docs/passo-3.md).
