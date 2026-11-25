@@ -8,7 +8,7 @@ che pianificano, generano, riparano (self-healing) e classificano (triage) i tes
 - [x] **Passo 1** – Progetto Playwright + app demo (Mini Shop) con i primi test
 - [x] **Passo 2** – Playwright MCP: un agente che pilota il browser
 - [x] **Passo 3** – Test agents di Playwright: planner, generator, healer
-- [ ] **Passo 4** – Orchestratore multi-agente
+- [x] **Passo 4** – Orchestratore multi-agente
 - [ ] **Passo 5** – Self-healing e triage dei fallimenti
 - [ ] **Passo 6** – CI, report e documentazione dell'architettura
 
@@ -21,6 +21,7 @@ npm test              # avvia l'app demo e lancia i test
 npm run demo          # solo l'app demo su http://localhost:3000
 npx playwright show-report
 npm run mcp:explore   # (con la demo avviata) parla con Playwright MCP come farebbe un agente
+npm run chaos -- rename-button,price-bug && npm run orchestrate   # orchestratore multi-agente
 ```
 
 ## Struttura
@@ -32,6 +33,8 @@ agents/              script e agenti che usano Playwright MCP
 .mcp.json            server MCP: playwright (browser) e playwright-test (test agents)
 .claude/agents/      planner, generator, healer (generati da `npx playwright init-agents`)
 specs/               piani di test scritti dal planner
+orchestrator/        runner, engine LLM intercambiabile, triage, router, healer, report
+chaos/               simula commit che rompono l'app (cambio di UI o bug vero)
 docs/                spiegazione e risultati di ogni passo
 playwright.config.ts config: avvia l'app con webServer, trace sui fallimenti
 ```
@@ -56,3 +59,10 @@ Tre subagenti con ruoli separati: il **planner** esplora l'app e scrive un piano
 esegue ogni scenario nel browser e lo trasforma in test, l'**healer** esegue i test rotti, li debugga e li ripara.
 Abbiamo rotto l'app apposta (un bottone rinominato + un bug sul totale): l'healer ha riparato i locator
 ma ha marcato come `fixme` i test che rilevavano il bug vero. Dettagli: [docs/passo-3.md](docs/passo-3.md).
+
+### Passo 4 – Orchestratore multi-agente
+Un loop in TypeScript coordina ruoli separati: **runner** (codice) → **triage** (un agente per test, in parallelo,
+sola lettura, risposta JSON) → **router** (regole in codice) → **healer** (scrive solo in `tests/`) oppure
+**bug report**. I guardrail finali impediscono di "riparare" un test che sta rilevando un bug.
+Su un commit con un bottone rinominato e un bug nel totale, l'orchestratore ripara 4 test e segnala il bug
+con il 97% di confidenza, lasciando rossi i 2 test giusti. Dettagli: [docs/passo-4.md](docs/passo-4.md).

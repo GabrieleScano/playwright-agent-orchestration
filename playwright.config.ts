@@ -8,6 +8,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'retain-on-failure',
+    actionTimeout: 5_000,
     // Opzionale: usa un Chromium già installato (es. in ambienti senza download).
     launchOptions: process.env.PW_CHROMIUM_PATH
       ? { executablePath: process.env.PW_CHROMIUM_PATH, chromiumSandbox: false }
